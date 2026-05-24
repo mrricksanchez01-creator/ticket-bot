@@ -10,7 +10,7 @@ const {
 } = require("discord.js");
 
 // ================= CONFIG =================
-const TOKEN = "MTUwODEyNDU4ODQ0ODQxNTgxNA.GJggTY.pp96NRf19MkCIC1s2EdLr6eYPJZfl32F5yh93c";
+const TOKEN = process.env.TOKEN;
 const CLIENT_ID = "1508124588448415814";
 const STAFF_ROLE_ID = "1508034773786820660";
 const GUILD_ID = "1487889233128460490";
@@ -184,5 +184,7 @@ If you need further assistance, feel free to open a new ticket anytime.
   }
 });
 
+// ================= LOGIN =================
+client.login(TOKEN);
 // ================= LOGIN =================
 client.login(TOKEN);
