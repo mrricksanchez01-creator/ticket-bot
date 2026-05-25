@@ -30,7 +30,7 @@ const client = new Client({
 const userToChannel = new Map();
 const channelToUser = new Map();
 
-// ================= READY + RECOVER OLD TICKETS =================
+// ================= READY + RECOVER TICKETS =================
 client.once("clientReady", async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
@@ -124,12 +124,10 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
 (async () => {
   try {
     console.log("Registering slash commands...");
-
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
       { body: commands }
     );
-
     console.log("Slash commands registered!");
   } catch (err) {
     console.error(err);
@@ -186,9 +184,14 @@ client.on("messageCreate", async (message) => {
 
     const channel = await createTicket(message.author, guild);
 
-    await channel.send(
-      `💬 **${message.author.username}:** ${text}`
-    );
+    // FIX: stop crashing on long messages
+    const msg = `💬 **${message.author.username}:** ${text}`;
+
+    if (msg.length > 2000) {
+      await channel.send(msg.slice(0, 1990) + "...");
+    } else {
+      await channel.send(msg);
+    }
 
     await message.reply("✅ Sent to support team.");
     return;
@@ -197,9 +200,7 @@ client.on("messageCreate", async (message) => {
   // CLOSE TICKET
   if (message.content === ".close") {
     if (!userId) {
-      return message.reply(
-        "❌ This is not a ticket channel."
-      );
+      return message.reply("❌ This is not a ticket channel.");
     }
 
     try {
