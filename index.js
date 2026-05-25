@@ -30,9 +30,47 @@ const client = new Client({
 const userToChannel = new Map();
 const channelToUser = new Map();
 
-// ================= READY =================
-client.once("ready", () => {
+// ================= READY + RECOVER OLD TICKETS =================
+client.once("clientReady", async () => {
   console.log(`Logged in as ${client.user.tag}`);
+
+  const guild = client.guilds.cache.get(GUILD_ID);
+  if (!guild) return console.log("Guild not found.");
+
+  console.log("Rebuilding ticket cache...");
+
+  const channels = await guild.channels.fetch();
+
+  for (const [, channel] of channels) {
+    if (!channel) continue;
+    if (!channel.name.startsWith("ticket-")) continue;
+
+    try {
+      const messages = await channel.messages.fetch({ limit: 10 });
+
+      const firstMsg = messages.find(
+        (m) =>
+          m.author.id === client.user.id &&
+          m.content.includes("Hello <@")
+      );
+
+      if (!firstMsg) continue;
+
+      const match = firstMsg.content.match(/<@(\d+)>/);
+      if (!match) continue;
+
+      const userId = match[1];
+
+      userToChannel.set(userId, channel.id);
+      channelToUser.set(channel.id, userId);
+
+      console.log(`Recovered ticket: ${userId} -> ${channel.name}`);
+    } catch {
+      console.log(`Failed to scan ${channel.name}`);
+    }
+  }
+
+  console.log("Ticket cache rebuilt.");
 });
 
 // ================= CREATE TICKET =================
@@ -74,12 +112,12 @@ A member of the team will get back to you shortly.`
   return channel;
 }
 
-// ================= SLASH COMMAND REGISTER =================
+// ================= REGISTER /TICKET =================
 const commands = [
   new SlashCommandBuilder()
     .setName("ticket")
     .setDescription("Create a support ticket"),
-].map(c => c.toJSON());
+].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
@@ -98,16 +136,19 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
   }
 })();
 
-// ================= INTERACTIONS =================
+// ================= SLASH COMMAND =================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === "ticket") {
-    const channel = await createTicket(interaction.user, interaction.guild);
+    const channel = await createTicket(
+      interaction.user,
+      interaction.guild
+    );
 
     await interaction.reply({
       content: `✅ Ticket created: ${channel}`,
-      ephemeral: true,
+      flags: 64,
     });
   }
 });
@@ -118,19 +159,22 @@ client.on("messageCreate", async (message) => {
 
   const userId = channelToUser.get(message.channel.id);
 
-  // ================= STAFF → USER (.r) =================
+  // STAFF -> USER
   if (userId && message.content.startsWith(".r ")) {
     const text = message.content.slice(3).trim();
     if (!text) return;
 
     const user = await client.users.fetch(userId);
 
-    await user.send(`📩 **${message.author.username}:** ${text}`);
+    await user.send(
+      `📩 **${message.author.username}:** ${text}`
+    );
+
     await message.reply("✅ Sent to user.");
     return;
   }
 
-  // ================= USER DM → STAFF (.r) =================
+  // USER DM -> STAFF
   if (message.channel.isDMBased()) {
     if (!message.content.startsWith(".r ")) return;
 
@@ -142,15 +186,20 @@ client.on("messageCreate", async (message) => {
 
     const channel = await createTicket(message.author, guild);
 
-    await channel.send(`💬 **${message.author.username}:** ${text}`);
+    await channel.send(
+      `💬 **${message.author.username}:** ${text}`
+    );
+
     await message.reply("✅ Sent to support team.");
     return;
   }
 
-  // ================= CLOSE TICKET =================
+  // CLOSE TICKET
   if (message.content === ".close") {
     if (!userId) {
-      return message.reply("❌ This is not a ticket channel.");
+      return message.reply(
+        "❌ This is not a ticket channel."
+      );
     }
 
     try {
@@ -165,11 +214,11 @@ Your support ticket has been closed by our support team.
 
 If you need further assistance, feel free to open a new ticket anytime.
 
-— Support Team`
+— McRonald's Support Team`
       );
 
-      channelToUser.delete(message.channel.id);
       userToChannel.delete(userId);
+      channelToUser.delete(message.channel.id);
 
       await message.reply("✅ Closing ticket...");
 
@@ -179,12 +228,10 @@ If you need further assistance, feel free to open a new ticket anytime.
 
     } catch (err) {
       console.log(err);
-      message.reply("❌ Failed to close ticket.");
+      await message.reply("❌ Failed to close ticket.");
     }
   }
 });
 
-// ================= LOGIN =================
-client.login(TOKEN);
 // ================= LOGIN =================
 client.login(TOKEN);
