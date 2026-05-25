@@ -1,3 +1,11 @@
+const http = require("http");
+
+// Keeps Render happy (free web service)
+http.createServer((req, res) => {
+  res.write("Bot is alive!");
+  res.end();
+}).listen(process.env.PORT || 3000);
+
 const {
   Client,
   GatewayIntentBits,
@@ -30,7 +38,7 @@ const client = new Client({
 const userToChannel = new Map();
 const channelToUser = new Map();
 
-// ================= READY + RECOVER TICKETS =================
+// ================= READY + RECOVER OLD TICKETS =================
 client.once("clientReady", async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
@@ -157,22 +165,19 @@ client.on("messageCreate", async (message) => {
 
   const userId = channelToUser.get(message.channel.id);
 
-  // STAFF -> USER
+  // STAFF -> USER (.r)
   if (userId && message.content.startsWith(".r ")) {
     const text = message.content.slice(3).trim();
     if (!text) return;
 
     const user = await client.users.fetch(userId);
 
-    await user.send(
-      `📩 **${message.author.username}:** ${text}`
-    );
-
+    await user.send(`📩 **${message.author.username}:** ${text}`);
     await message.reply("✅ Sent to user.");
     return;
   }
 
-  // USER DM -> STAFF
+  // USER DM -> STAFF (.r)
   if (message.channel.isDMBased()) {
     if (!message.content.startsWith(".r ")) return;
 
@@ -184,9 +189,9 @@ client.on("messageCreate", async (message) => {
 
     const channel = await createTicket(message.author, guild);
 
-    // FIX: stop crashing on long messages
     const msg = `💬 **${message.author.username}:** ${text}`;
 
+    // Stops crash if message too long
     if (msg.length > 2000) {
       await channel.send(msg.slice(0, 1990) + "...");
     } else {
